@@ -1,144 +1,134 @@
-# Recherche sémantique — Frontend
+# Moteur de recherche sémantique : Frontend
 
-Interface web d'un moteur de recherche sémantique en français.
-L'utilisateur saisit une requête en langage naturel (par exemple
-« automobile propre ») et l'application affiche les documents les plus
-proches **par le sens**, avec un score de similarité.
+Interface web **Next.js** d'un moteur de recherche sémantique en français, réalisée pour un projet scolaire sur les **embeddings**.
 
-> Ce dépôt contient **uniquement le frontend**. Le backend FastAPI existe
-> déjà et n'est jamais modifié : les deux applications sont totalement
-> séparées et communiquent uniquement via HTTP.
+L'utilisateur tape une recherche en langage naturel (ex. « automobile propre ») et l'interface affiche les documents les plus proches par le **sens**, avec leur score de pertinence.
 
-## Sommaire
+> Ce dépôt contient uniquement le frontend. Toute la logique (embeddings, recherche) est dans le backend FastAPI : _(lien du dépôt backend)_
 
-- [Prérequis](#prérequis)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Lancement](#lancement)
-- [Architecture](#architecture)
-- [Fonctionnalités](#fonctionnalités)
-- [Scripts disponibles](#scripts-disponibles)
+## Fonctionnalités
+
+- Barre de recherche (bouton ou touche Entrée)
+- Choix du nombre de résultats (3, 5 ou 10)
+- Exemples de requêtes cliquables
+- Résultats sous forme de cartes avec rang, texte, score en pourcentage et barre de progression
+- Badge de couleur selon le score (vert, orange, gris)
+- Temps de réponse affiché en millisecondes
+- États gérés : chargement, aucun résultat, erreur réseau, requête trop courte
+- Design responsive, mode sombre automatique
+
+## Architecture
+
+```
+Frontend Next.js ──HTTP (fetch)──▶ Backend FastAPI
+  localhost:3000                    localhost:8000
+```
+
+Le frontend appelle uniquement l'endpoint `GET /search?q=...&k=...` du backend. Il n'effectue aucun calcul d'IA.
+
+## Structure du projet
+
+```
+.
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx
+│   └── globals.css
+├── components/
+│   ├── SearchBar.tsx
+│   ├── ResultCard.tsx
+│   ├── ResultList.tsx
+│   └── ExampleQueries.tsx
+├── lib/
+│   └── api.ts              # appel à l'API + types TypeScript
+├── .env.local.example
+└── README.md
+```
 
 ## Prérequis
 
-- **Node.js** 18.18 ou supérieur (LTS recommandé)
-- **npm** (fourni avec Node.js)
-- Le **backend FastAPI** démarré et accessible (par défaut sur
-  `http://127.0.0.1:8000`)
+- Node.js 18 ou plus récent et npm
+- Le **backend FastAPI lancé** (voir le README du dépôt backend)
 
 ## Installation
-
-Depuis le dossier `frontend/` :
 
 ```bash
 npm install
 ```
 
-## Configuration
+### Configurer l'URL du backend
 
-L'URL du backend est lue depuis la variable d'environnement
-`NEXT_PUBLIC_API_URL`.
+Copiez le fichier d'exemple :
 
-1. Copiez le fichier d'exemple :
+```bash
+cp .env.local.example .env.local
+```
 
-   ```bash
-   cp .env.local.example .env.local
-   ```
+Contenu de `.env.local` :
 
-2. Vérifiez / adaptez la variable si nécessaire :
+```
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
 
-   ```bash
-   NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
-   ```
+Modifiez cette URL si le backend tourne ailleurs (autre port, autre machine, serveur déployé).
 
-> Le préfixe `NEXT_PUBLIC_` est obligatoire : Next.js n'expose au navigateur
-> que les variables qui commencent par `NEXT_PUBLIC_`. Si la variable n'est
-> pas définie, le frontend utilise `http://127.0.0.1:8000` par défaut.
+## Lancer le projet
 
-## Lancement
+### 1. Démarrer le backend
+
+Dans le dépôt backend :
+
+```bash
+source ~/venvs/semantic-search/bin/activate
+uvicorn main:app --reload
+```
+
+### 2. Démarrer le frontend
 
 ```bash
 npm run dev
 ```
 
-Ouvrez ensuite [http://localhost:3000](http://localhost:3000).
+Ouvrez http://localhost:3000.
 
-Assurez-vous que le backend FastAPI tourne en parallèle, sinon un message
-« Le serveur est injoignable, vérifiez que le backend tourne » s'affichera.
+## Version de production
 
-## Architecture
-
-```text
-frontend/
-├── app/
-│   ├── layout.tsx        # Layout racine (lang="fr", polices, métadonnées)
-│   ├── page.tsx          # Page d'accueil : orchestration et états
-│   └── globals.css       # Styles globaux + Tailwind CSS
-├── components/
-│   ├── SearchBar.tsx     # Champ de recherche, sélecteur (3/5/10) et bouton
-│   ├── ExampleQueries.tsx# Exemples de requêtes cliquables
-│   ├── ResultCard.tsx    # Carte d'un document (rang, score, barre, badge)
-│   └── ResultList.tsx    # Liste des résultats + chargement + état vide
-├── lib/
-│   └── api.ts            # searchDocuments(q, k) + types TypeScript
-├── .env.local.example    # Modèle de configuration
-└── README.md
+```bash
+npm run build
+npm start
 ```
-
-### Séparation frontend / backend
-
-- **Aucune logique métier** dans le frontend : la transformation de la requête
-  en *embedding* et le calcul de la **similarité cosinus** sont réalisés par le
-  backend FastAPI.
-- Le frontend appelle un unique endpoint : `GET /search?q=<texte>&k=<nombre>`.
-- Réponse attendue :
-
-  ```json
-  [
-    { "texte": "La voiture électrique ...", "score": 0.642 }
-  ]
-  ```
-
-  `score` est une similarité cosinus entre `0` et `1` (plus haut = plus
-  pertinent).
-
-### Flux de données
-
-1. L'utilisateur saisit une requête et clique sur **Rechercher** (ou appuie sur
-   **Entrée**). Les exemples lancent directement la recherche.
-2. `lib/api.ts` envoie la requête HTTP au backend via le `fetch` natif.
-3. `app/page.tsx` gère les états : chargement, résultats, aucun résultat,
-   requête trop courte (< 2 caractères) et erreur réseau.
-4. `ResultList` / `ResultCard` affichent les cartes (rang, texte, score en
-   pourcentage, barre de progression et badge de couleur).
-
-### Technologies
-
-- **Next.js 16** (App Router) + **TypeScript** strict
-- **Tailwind CSS v4**
-- `fetch` natif uniquement — aucune autre bibliothèque (pas d'axios, pas de UI kit)
-
-## Fonctionnalités
-
-- Barre de recherche avec validation par **Entrée** et bouton **Rechercher**.
-- Sélecteur du nombre de résultats : **3, 5 ou 10**.
-- Exemples de requêtes cliquables qui lancent la recherche.
-- Cartes de résultats : texte, rang (`#1`, `#2`…), score en pourcentage et
-  barre de progression.
-- Badge de couleur selon le score : **vert** (élevé), **orange** (moyen),
-  **gris** (faible).
-- Temps de réponse affiché en millisecondes.
-- Gestion propre des états : **chargement** (squelettes), **aucun résultat**,
-  **erreur réseau**, **requête trop courte**.
-- Annulation des requêtes précédentes (`AbortController`) pour éviter les
-  résultats périmés.
-- Design responsive et **mode sombre automatique** selon le système.
 
 ## Scripts disponibles
 
-| Script          | Description                                  |
-| --------------- | -------------------------------------------- |
-| `npm run dev`   | Démarre le serveur de développement          |
-| `npm run build` | Compile l'application pour la production     |
-| `npm start`     | Démarre l'application compilée               |
-| `npm run lint`  | Vérifie le code avec ESLint                  |
+| Commande | Description |
+|---|---|
+| `npm run dev` | Serveur de développement |
+| `npm run build` | Compilation de production |
+| `npm start` | Lance la version compilée |
+| `npm run lint` | Vérifie le code |
+
+## Exemples de requêtes à tester
+
+- automobile propre
+- comment faire une pâte à pizza
+- protéger la planète
+- animal de compagnie qui miaule
+- apprendre à une machine
+- pays de l'océan Indien avec des lémuriens
+
+## Problèmes fréquents
+
+| Problème | Solution |
+|---|---|
+| « Le serveur est injoignable » | Le backend n'est pas lancé, ou `NEXT_PUBLIC_API_URL` est incorrecte. |
+| Erreur CORS dans la console du navigateur | Le backend doit autoriser `http://localhost:3000` dans son middleware CORS. |
+| L'URL de l'API ne change pas après modification de `.env.local` | Redémarrez `npm run dev` : les variables d'environnement sont lues au démarrage. |
+| Aucun résultat | Vérifiez que l'index a bien été construit côté backend (`python build_index.py`). |
+
+## Technologies
+
+Next.js (App Router), TypeScript, Tailwind CSS, `fetch` natif.
+
+## Auteurs
+
+Projet réalisé par : _(noms de l'équipe)_
